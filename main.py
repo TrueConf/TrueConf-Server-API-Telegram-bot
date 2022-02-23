@@ -68,8 +68,7 @@ def get_access_token(server) -> None:
             url="https://{}/oauth2/v1/token".format(server['ip']),
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
             data='grant_type=client_credentials&client_id={0}&client_secret={1}'.format(
-                server['client_id'], server['client_secret']),
-            verify=False)
+                server['client_id'], server['client_secret']))
         if response.status_code != 200:
             raise HTTPError
         server['access_token'] = json.loads(response.text)['access_token']
@@ -86,7 +85,7 @@ def get_access_token(server) -> None:
 
 def get_participants_list(server, session_id):
     try:
-        response = requests.get("https://{0}/api/v3.3/conference-sessions/{1}/participants?access_token={2}".format(server['ip'], session_id, server['access_token']), verify=False,timeout=5)
+        response = requests.get("https://{0}/api/v3.3/conference-sessions/{1}/participants?access_token={2}".format(server['ip'], session_id, server['access_token']),timeout=5)
         response.raise_for_status()
         count = json.loads(response.text)['count']
         participants = json.loads(response.text)['participants']
@@ -104,7 +103,7 @@ def get_participants_list(server, session_id):
 
 def get_forgotten_conference(server) -> List:
     try:
-        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=500".format(server['ip'], server['access_token']), verify=False, timeout=5)
+        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=500".format(server['ip'], server['access_token']), timeout=5)
         response.raise_for_status()  # проверка статуса ответа
         forgotten_list = []
         for i in json.loads(response.text)['list']:
@@ -178,7 +177,7 @@ def get_result_forgotten(update: Update, context: CallbackContext) -> None:
 
 def get_conference_running(server) -> List:
     try:
-        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=200".format(server['ip'], server['access_token']), verify=False,timeout=5)
+        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=200".format(server['ip'], server['access_token']), timeout=5)
         response.raise_for_status()  # проверка статуса ответа
         run_list = []
         for i in json.loads(response.text)['list']:
@@ -224,7 +223,7 @@ def stop_conference(update: Update, context: CallbackContext):
     flag = q[2]
     try:
         response = requests.post("https://{}/api/v3.3/conferences/{}/stop?access_token={}".format(
-                server['ip'], conf_id, server['access_token']), verify=False)
+                server['ip'], conf_id, server['access_token']))
         print(response.text)
         if response.status_code != 200:
             raise HTTPError
@@ -256,7 +255,7 @@ def check_status(server, state):
         status_th = threading.Timer(
             server['server_status']['timeout'], check_status, args=[server, state])
         try:
-            response = requests.get("http://{}:4307/vsstatus".format(server['ip']), timeout=5)
+            response = requests.get("http://{}:4307/vsstatus".format(server['ip']), timeout = 5)
             response.raise_for_status()
             if server['ip'] not in STATUS.keys():
                 STATUS[server['ip']] = 1
@@ -312,7 +311,7 @@ def check_status_button(update: Update, context: CallbackContext):
 def get_online_users(server) -> List:
     online_count = 0
     try:
-        response = requests.get("https://{0}/api/v3.3/users?access_token={1}".format(server['ip'], server['access_token']), verify=False,timeout=5)
+        response = requests.get("https://{0}/api/v3.3/users?access_token={1}".format(server['ip'], server['access_token']), timeout=5)
         response.raise_for_status()  # проверка статуса ответа
         for i in json.loads(response.text)['users']:
             if i['status'] in (1, 2, 5):
