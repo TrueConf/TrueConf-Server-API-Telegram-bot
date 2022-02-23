@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "tcs-api-for-telegram"
+version = "0.1.0"
+description = ""
+authors = ["TrueConf"]
+
+[virtualenvs]
+create = true
+in-project = true
+
+[tool.poetry.dependencies]
+python = "^3.7"
+requests = "^2.27.1"
+python-telegram-bot = "^13.10"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
