@@ -1,9 +1,7 @@
-from typing import List
+from xmlrpc.client import boolean
 import requests
 import json
-from requests.exceptions import HTTPError
-import urllib.request as req
-import shelve
+import urllib
 import threading
 import datetime
 import telegram
@@ -61,31 +59,36 @@ def auth_user(update: Update):
     return False
 
 
-def get_access_token(server) -> None:
+def ssl_certificate(server):
+    if server['ssl_certificate'] == True:
+        return True
+    elif not server['ssl_certificate']:
+        return False
+    else:
+        return server['ssl_certificate']
+
+def get_access_token(server) -> boolean:
     try:
-        response = requests.request(
-            "POST",
-            url="https://{}/oauth2/v1/token".format(server['ip']),
+        response = requests.post(url="https://{}/oauth2/v1/token".format(server['ip']),
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
             data='grant_type=client_credentials&client_id={0}&client_secret={1}'.format(
-                server['client_id'], server['client_secret']))
+                server['client_id'], server['client_secret']),verify=ssl_certificate(server))
         if response.status_code != 200:
-            raise HTTPError
+            raise requests.exceptions.HTTPError
         server['access_token'] = json.loads(response.text)['access_token']
-        SETTINGS["servers"][server['ip']
-                            ]['access_token'] = server['access_token']
+        SETTINGS["servers"][server['ip']]['access_token'] = server['access_token']
         with open("settings.json", "w") as read_file:
             json.dump(SETTINGS, read_file) # for local file
         # os.environ['settings'] = json.dumps(SETTINGS) # for Replit
         return True
-    except HTTPError:
+    except requests.exceptions.HTTPError:
         if json.loads(response.text)['reason'] == 'InvalidCredentials':
             return False
 
 
 def get_participants_list(server, session_id):
     try:
-        response = requests.get("https://{0}/api/v3.3/conference-sessions/{1}/participants?access_token={2}".format(server['ip'], session_id, server['access_token']),timeout=5)
+        response = requests.get("https://{0}/api/v3.3/conference-sessions/{1}/participants?access_token={2}".format(server['ip'], session_id, server['access_token']),verify = ssl_certificate(server), timeout = 5)
         response.raise_for_status()
         count = json.loads(response.text)['count']
         participants = json.loads(response.text)['participants']
@@ -96,23 +99,23 @@ def get_participants_list(server, session_id):
                 if i['role'] == 2:
                     return False, count
         return True, count
-    except HTTPError:
+    except requests.exceptions.HTTPError:
         return False, 0
 
 
 
-def get_forgotten_conference(server) -> List:
+def get_forgotten_conference(server) -> list:
     try:
-        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=500".format(server['ip'], server['access_token']), timeout=5)
+        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=500".format(server['ip'], server['access_token']),verify=ssl_certificate(server), timeout=5)
         response.raise_for_status()  # проверка статуса ответа
         forgotten_list = []
         for i in json.loads(response.text)['list']:
             if i['end_time'] is None and i['class'] > 1 and i['duration']/3600 >= 1:
                 flag, participant_count = get_participants_list(
-                    server, req.pathname2url(i['conference_id']))
+                    server, urllib.request.pathname2url(i['conference_id']))
                 if flag:
                     forgotten_list.append(
-                        {'conf_id': req.pathname2url(i['conference_id']), 'named_id': i['named_conf_id'], 'participant_count': participant_count, 'topic': i['topic'], 'owner': i['owner'], 'duration': str(datetime.timedelta(seconds=i['duration']))})
+                        {'conf_id': urllib.request.pathname2url(i['conference_id']), 'named_id': i['named_conf_id'], 'participant_count': participant_count, 'topic': i['topic'], 'owner': i['owner'], 'duration': str(datetime.timedelta(seconds=i['duration']))})
         return forgotten_list
     except requests.exceptions.HTTPError:
         if response.status_code == 403:
@@ -175,9 +178,9 @@ def get_result_forgotten(update: Update, context: CallbackContext) -> None:
             STRINGS['no_forgotten_conf'].format(server), reply_markup=InlineKeyboardMarkup(keyboard_back), parse_mode="HTML")
 
 
-def get_conference_running(server) -> List:
+def get_conference_running(server) -> list:
     try:
-        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=200".format(server['ip'], server['access_token']), timeout=5)
+        response = requests.get("https://{0}/api/v3.3/logs/calls?access_token={1}&sort_field=end_time&sort_order=1&page_size=200".format(server['ip'], server['access_token']),verify=ssl_certificate(server), timeout=5)
         response.raise_for_status()  # проверка статуса ответа
         run_list = []
         for i in json.loads(response.text)['list']:
@@ -187,7 +190,7 @@ def get_conference_running(server) -> List:
                 else:
                     topic = i['topic']
                 run_list.append(
-                    {'conf_id': req.pathname2url(i['conference_id']), 'named_id': i['named_conf_id'], 'participant_count': i['participant_count'], 'topic': topic, 'owner': i['owner'], 'duration': str(datetime.timedelta(seconds=i['duration']))})
+                    {'conf_id': urllib.request.pathname2url(i['conference_id']), 'named_id': i['named_conf_id'], 'participant_count': i['participant_count'], 'topic': topic, 'owner': i['owner'], 'duration': str(datetime.timedelta(seconds=i['duration']))})
         return run_list
     except requests.exceptions.HTTPError:
         if response.status_code == 403:
@@ -226,7 +229,7 @@ def stop_conference(update: Update, context: CallbackContext):
                 server['ip'], conf_id, server['access_token']))
         print(response.text)
         if response.status_code != 200:
-            raise HTTPError
+            raise requests.exceptions.HTTPError
         if flag == '0':
             get_result_forgotten(update, context)
         else:
@@ -308,14 +311,19 @@ def check_status_button(update: Update, context: CallbackContext):
     # os.environ['settings'] = json.dumps(SETTINGS) # for Replit
     server_status(update, context, server)
 
-def get_online_users(server) -> List:
+def get_online_users(server) -> list:
     online_count = 0
-    try:
-        response = requests.get("https://{0}/api/v3.3/users?access_token={1}".format(server['ip'], server['access_token']), timeout=5)
-        response.raise_for_status()  # проверка статуса ответа
-        for i in json.loads(response.text)['users']:
-            if i['status'] in (1, 2, 5):
-                online_count += 1
+    page_id = 0
+    next_page_id = 0
+    try:  
+        while next_page_id != -1:
+            response = requests.get("https://{0}/api/v3.3/users?access_token={1}&page_id={2}".format(server['ip'], server['access_token'],page_id), verify = ssl_certificate(server), timeout=5)
+            response.raise_for_status()  # проверка статуса ответа        
+            for i in json.loads(response.text)['users']:
+                if i['status'] in (1, 2, 5):
+                    online_count += 1
+            next_page_id = json.loads(response.text)['next_page_id']
+            page_id+=1
         return online_count
     except requests.exceptions.HTTPError:
         if response.status_code == 403:
@@ -326,7 +334,7 @@ def get_online_users(server) -> List:
                     return None
         if response.status_code == 404:
             return "ConnectionError"
-    except requests.exceptions.ConnectTimeout:
+    except (requests.exceptions.ConnectTimeout):
         return "ConnectionError"
 
 
@@ -339,16 +347,16 @@ def online_users_button(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton(STRINGS['back'],
                               callback_data='service_select_button|{}'.format(server))]]
-    if online_list is None:
+    
+    if online_list:
+        query.message.edit_text(STRINGS['online_user'].format(
+            server, online_list), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    elif online_list is None:
         query.message.edit_text(
             STRINGS['error_oauth2'].format(server), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     elif online_list == "ConnectionError":
         query.message.edit_text(STRINGS['connection_error'].format(
-            server), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-    elif not online_list:
-        query.message.edit_text(STRINGS['online_user'].format(
-            server, online_list), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-        
+            server), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")          
     else:
         query.message.edit_text(
             STRINGS['no_online_user'].format(server), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
