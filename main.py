@@ -1,4 +1,3 @@
-from xmlrpc.client import boolean
 import requests
 import json
 import urllib
@@ -67,7 +66,7 @@ def ssl_certificate(server):
     else:
         return server['ssl_certificate']
 
-def get_access_token(server) -> boolean:
+def get_access_token(server) -> bool:
     try:
         response = requests.post(url="https://{}/oauth2/v1/token".format(server['ip']),
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
